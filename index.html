@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盘扣脚手架重量计算器</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    margin: 0;
+    padding: 16px;
+    background: #f5f6f8;
+    color: #222;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 18px; }
+
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .label { font-size: 13px; color: #555; margin-bottom: 6px; display: block; }
+
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: #3b82f6; }
+
+  .hint {
+    font-size: 12px;
+    color: #888;
+    background: #f8f9fa;
+    border-left: 3px solid #3b82f6;
+    padding: 8px 10px;
+    margin-top: 10px;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-line;
+  }
+
+  .btn-primary {
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 12px;
+    width: 100%;
+    font-weight: 500;
+  }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-primary:active { background: #1d4ed8; }
+
+  .btn-secondary {
+    background: #f0f1f3;
+    color: #555;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  .btn-secondary:hover { background: #e5e7eb; }
+
+  .result-section { display: none; }
+  .result-section.show { display: block; }
+
+  .warn {
+    font-size: 13px;
+    color: #856404;
+    background: #fff3cd;
+    border-left: 3px solid #ffc107;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border-radius: 0 4px 4px 0;
+  }
+  .warn b { color: #664d03; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+  th, td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+  }
+  th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #555;
+    font-size: 13px;
+  }
+  td input.qty {
+    width: 70px;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: right;
+    outline: none;
+    font-family: inherit;
+  }
+  td input.qty:focus { border-color: #3b82f6; }
+  td.subtotal { color: #555; font-variant-numeric: tabular-nums; }
+
+  .total-card {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .total-label { font-size: 14px; opacity: 0.9; }
+  .total-value { font-size: 28px; font-weight: 600; margin: 4px 0; font-variant-numeric: tabular-nums; }
+  .total-ton { font-size: 14px; opacity: 0.9; }
+
+  .empty {
+    color: #999;
+    text-align: center;
+    padding: 20px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 10px; }
+    .card { padding: 12px; }
+    h1 { font-size: 19px; }
+    .total-value { font-size: 24px; }
+    th, td { padding: 8px 4px; font-size: 13px; }
+    td input.qty { width: 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>盘扣脚手架重量计算器</h1>
+  <div class="subtitle">把清单贴进来，自动算重量</div>
+
+  <!-- 输入区 -->
+  <div class="card">
+    <label class="label" for="input">把清单贴在这里</label>
+    <textarea id="input" placeholder="一行一种配件，写清楚规格和支数即可。比如：
+立杆1米100支
+横杆0.55米200支
+斜拉杆1.71米50支
+顶托 50 支
+底座 30 套
+
+也可以写「几扎」「几捆」，会自动乘上每捆多少支：
+立杆2.5米11扎
+横杆0.6 4扎
+横杆0.9 3捆"></textarea>
+    <div class="hint">一行一种配件。横杆 0.55 米实际是 HG0.6、0.85 米是 HG0.9、1.15 米是 HG1.2；斜拉杆也可写「斜杆」；顶托也可写「螺丝头」。写「几扎/几捆/几件/几吊」会自动乘上每捆支数。</div>
+    <button class="btn-primary" id="btn-calc">开始计算</button>
+  </div>
+
+  <!-- 结果区 -->
+  <div class="result-section" id="result">
+
+    <div class="warn" id="warn" style="display:none;"></div>
+
+    <div class="card">
+      <label class="label">明细</label>
+      <table id="detail-table">
+        <thead>
+          <tr>
+            <th>类型</th>
+            <th>规格型号</th>
+            <th>数量</th>
+            <th>小计（kg）</th>
+          </tr>
+        </thead>
+        <tbody id="detail-body"></tbody>
+      </table>
+    </div>
+
+    <div class="total-card">
+      <div class="total-label">总重量</div>
+      <div class="total-value" id="total-kg">0.000 kg</div>
+      <div class="total-ton" id="total-ton">= 0.000 吨</div>
+    </div>
+
+    <div class="card">
+      <label class="label" for="remark">备注（可选）</label>
+      <textarea id="remark" style="min-height:60px;" placeholder="比如：某项目 A 区"></textarea>
+    </div>
+
+    <button class="btn-secondary" id="btn-reset">重新输入</button>
+
+  </div>
+
+</div>
+
+<script>
+// ============ 配件对照表（开工令里那张表）============
+const PARTS = [
+  { type: '立杆',   code: 'LG0.2',   size: '0.2m',  weight: 1.750,  bundle: 805, matcher: ['0.2','0.20'] },
+  { type: '立杆',   code: 'LG0.3',   size: '0.3m',  weight: 2.700,  bundle: 805, matcher: ['0.3','0.30'] },
+  { type: '立杆',   code: 'LG0.5',   size: '0.5m',  weight: 3.500,  bundle: 483, matcher: ['0.5','0.50'] },
+  { type: '立杆',   code: 'LG1.0',   size: '1m',    weight: 5.950,  bundle: 322, matcher: ['1','1.0','1.00','1.000'] },
+  { type: '立杆',   code: 'LG1.5',   size: '1.5m',  weight: 8.300,  bundle: 161, matcher: ['1.5','1.50','1.500'] },
+  { type: '立杆',   code: 'LG2.0',   size: '2m',    weight: 10.800, bundle: 161, matcher: ['2','2.0','2.00','2.000'] },
+  { type: '立杆',   code: 'LG2.5',   size: '2.5m',  weight: 13.100, bundle: 161, matcher: ['2.5','2.50','2.500'] },
+  { type: '横杆',   code: 'HG0.3',   size: '0.3m',  weight: 1.420,  bundle: 700, matcher: ['0.3','0.30'] },
+  { type: '横杆',   code: 'HG0.6',   size: '0.55m', weight: 2.480,  bundle: 320, matcher: ['0.6','0.60','0.55','0.550'] },
+  { type: '横杆',   code: 'HG0.9',   size: '0.85m', weight: 3.400,  bundle: 320, matcher: ['0.9','0.90','0.85','0.850'] },
+  { type: '横杆',   code: 'HG1.2',   size: '1.15m', weight: 4.350,  bundle: 320, matcher: ['1.2','1.20','1.15','1.150'] },
+  { type: '斜拉杆', code: 'XLG1.61', size: '1.61m', weight: 5.420,  bundle: 300, matcher: ['1.61'] },
+  { type: '斜拉杆', code: 'XLG1.71', size: '1.71m', weight: 5.700,  bundle: 300, matcher: ['1.71'] },
+  { type: '斜拉杆', code: 'XLG1.86', size: '1.86m', weight: 6.100,  bundle: 300, matcher: ['1.86'] },
+  { type: '顶托',   code: '顶托',    size: '38*600m', weight: 4.920, bundle: 150 },
+  { type: '底座',   code: '底座',    size: '38*500m', weight: 3.410, bundle: 100 },
+  { type: '架子',   code: '架子',    size: '1套', weight: 0.030 },
+];
+
+// ============ 解析逻辑 ============
+function parseInput(text) {
+  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(l => l);
+  const matched = {};   // code -> { part, qty }
+  const unmatched = [];
+
+  for (const line of lines) {
+    let hit = false;
+
+    // 立杆 / 横杆 / 斜拉杆：米数可选（「横杆0.6」或「横杆0.55米」都能识别）
+    const typeMatch = line.match(/(立杆|横杆|斜拉杆|斜杆)/);
+    if (typeMatch) {
+      const typeName = typeMatch[1] === '斜杆' ? '斜拉杆' : typeMatch[1];
+      // 提取米数：数字 + 可选的(米|m|M)
+      const meterMatch = line.match(/(\d+(?:\.\d+)?)\s*(?:米|m|M)?/);
+      // 提取数量：找任意整数/小数
+      const numMatch = line.match(/(\d+(?:\.\d+)?)/g);
+      if (meterMatch && numMatch && numMatch.length >= 1) {
+        const meter = meterMatch[1];
+        // 数量 = 所有数字中不等于 meter 的那个；如果只有一个数字，meter 就是规格，数量需要另外找（容错：取 numMatch 里最大的数字当数量）
+        let qty = null;
+        for (const n of numMatch) {
+          if (n !== meter) { qty = parseFloat(n); break; }
+        }
+        if (qty === null) {
+          // 只有一个数字（只有规格没数量）→ 当作 0，让用户手动填
+          qty = 0;
+        }
+
+        const candidates = PARTS.filter(p => p.type === typeName && p.matcher && p.matcher.includes(meter));
+        if (candidates.length === 1) {
+          const part = candidates[0];
+          if (/(扎|捆|件|吊)/.test(line) && part.bundle) qty = qty * part.bundle;
+          if (matched[part.code]) matched[part.code].qty += qty;
+          else matched[part.code] = { part, qty };
+          hit = true;
+        } else if (candidates.length > 1) {
+          // 多个匹配（理论上不会发生，因为每个型号 matcher 唯一）
+          const part = candidates[0];
+          if (/(扎|捆|件|吊)/.test(line) && part.bundle) qty = qty * part.bundle;
+          if (matched[part.code]) matched[part.code].qty += qty;
+          else matched[part.code] = { part, qty };
+          hit = true;
+        } else {
+          // 找不到对应规格
+          unmatched.push(line);
+          hit = true;
+        }
+      }
+    }
+
+    if (hit) continue;
+
+    // 顶托 / 底座 / 下托 / 架子 / 槽钢架子
+    if (/顶托|螺丝头/.test(line)) {
+      const numMatch = line.match(/(\d+(?:\.\d+)?)/);
+      if (numMatch) {
+        const part = PARTS.find(p => p.type === '顶托');
+        let qty = parseFloat(numMatch[1]);
+        if (/(扎|捆|件|吊)/.test(line) && part.bundle) qty = qty * part.bundle;
+        if (matched[part.code]) matched[part.code].qty += qty;
+        else matched[part.code] = { part, qty };
+        hit = true;
+      }
+    } else if (/底座|下托/.test(line)) {
+      const numMatch = line.match(/(\d+(?:\.\d+)?)/);
+      if (numMatch) {
+        const part = PARTS.find(p => p.type === '底座');
+        let qty = parseFloat(numMatch[1]);
+        if (/(扎|捆|件|吊)/.test(line) && part.bundle) qty = qty * part.bundle;
+        if (matched[part.code]) matched[part.code].qty += qty;
+        else matched[part.code] = { part, qty };
+        hit = true;
+      }
+    } else if (/架子|槽钢架子/.test(line)) {
+      const numMatch = line.match(/(\d+(?:\.\d+)?)/);
+      if (numMatch) {
+        const part = PARTS.find(p => p.type === '架子');
+        let qty = parseFloat(numMatch[1]);
+        if (/(扎|捆|件|吊)/.test(line) && part.bundle) qty = qty * part.bundle;
+        if (matched[part.code]) matched[part.code].qty += qty;
+        else matched[part.code] = { part, qty };
+        hit = true;
+      }
+    }
+
+    if (!hit) {
+      unmatched.push(line);
+    }
+  }
+
+  return { matched, unmatched };
+}
+
+// ============ 渲染 ============
+function fmt(n) {
+  return n.toFixed(3);
+}
+
+function renderResult(matched, unmatched) {
+  const tbody = document.getElementById('detail-body');
+  tbody.innerHTML = '';
+
+  const codes = Object.keys(matched);
+  if (codes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">没有识别到配件</td></tr>';
+  } else {
+    for (const code of codes) {
+      const { part, qty } = matched[code];
+      const tr = document.createElement('tr');
+      tr.dataset.code = code;
+      tr.innerHTML = `
+        <td>${part.type}</td>
+        <td>${part.code}</td>
+        <td><input type="number" class="qty" min="0" step="1" value="${qty}"></td>
+        <td class="subtotal">${fmt(part.weight * qty)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    // 绑定数量变化事件
+    tbody.querySelectorAll('input.qty').forEach(inp => {
+      inp.addEventListener('input', onQtyChange);
+    });
+  }
+
+  // 警告
+  const warn = document.getElementById('warn');
+  if (unmatched.length > 0) {
+    warn.style.display = 'block';
+    warn.innerHTML = '<b>以下内容没识别出来，已跳过：</b>' + unmatched.join('、');
+  } else {
+    warn.style.display = 'none';
+  }
+
+  // 合计
+  updateTotal();
+
+  // 显示结果区
+  document.getElementById('result').classList.add('show');
+}
+
+function onQtyChange(e) {
+  const tr = e.target.closest('tr');
+  const code = tr.dataset.code;
+  const part = PARTS.find(p => p.code === code);
+  let qty = parseFloat(e.target.value);
+  if (isNaN(qty) || qty < 0) qty = 0;
+  tr.querySelector('.subtotal').textContent = fmt(part.weight * qty);
+  updateTotal();
+}
+
+function updateTotal() {
+  let total = 0;
+  document.querySelectorAll('#detail-body tr').forEach(tr => {
+    const code = tr.dataset.code;
+    if (!code) return;
+    const part = PARTS.find(p => p.code === code);
+    const inp = tr.querySelector('input.qty');
+    const qty = parseFloat(inp.value);
+    if (!isNaN(qty) && qty > 0) total += part.weight * qty;
+  });
+  document.getElementById('total-kg').textContent = fmt(total) + ' kg';
+  document.getElementById('total-ton').textContent = '= ' + fmt(total / 1000) + ' 吨';
+}
+
+// ============ 事件绑定 ============
+document.getElementById('btn-calc').addEventListener('click', () => {
+  const text = document.getElementById('input').value;
+  const { matched, unmatched } = parseInput(text);
+  renderResult(matched, unmatched);
+  // 滚动到结果
+  document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  document.getElementById('input').value = '';
+  document.getElementById('remark').value = '';
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('warn').style.display = 'none';
+  document.getElementById('detail-body').innerHTML = '';
+  document.getElementById('total-kg').textContent = '0.000 kg';
+  document.getElementById('total-ton').textContent = '= 0.000 吨';
+  localStorage.removeItem('remark');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// 备注：本地存储
+const remarkEl = document.getElementById('remark');
+const savedRemark = localStorage.getItem('remark');
+if (savedRemark) remarkEl.value = savedRemark;
+remarkEl.addEventListener('input', () => {
+  localStorage.setItem('remark', remarkEl.value);
+});
+</script>
+</body>
+</html>
