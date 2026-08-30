@@ -1,0 +1,12 @@
+{
+  "name": "脚手架重量计算器",
+  "short_name": "脚手架计算",
+  "description": "盘扣/套扣脚手架重量计算，支持自然语言清单、模板、项目存档",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#3b82f6",
+  "theme_color": "#3b82f6",
+  "icons": [
+    { "src": "icon.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}
