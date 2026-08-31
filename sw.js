@@ -1,5 +1,5 @@
 // 脚手架重量计算器 - Service Worker（网络优先，离线回退）
-var CACHE = 'scaffold-v1.3.0';
+var CACHE = 'scaffold-v1.4.0';
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();
@@ -23,7 +23,7 @@ self.addEventListener('fetch', function (e) {
   var url = e.request.url;
   // 只缓存同源资源
   if (url.indexOf(self.location.origin) !== 0) return;
-  // 分享链接带 ?m=&d=&r= 查询串，内容各不相同，不进缓存以免无限污染
+  // 分享链接带 ?m=&d2=&r= 查询串（旧 d= 也兼容），内容各不相同，不进缓存以免无限污染
   if (url.indexOf('?') !== -1) return;
   e.respondWith(
     fetch(e.request).then(function (res) {
