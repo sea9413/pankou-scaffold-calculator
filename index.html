@@ -659,7 +659,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.0';
+  var VER = 'v1.6.1';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -2195,8 +2195,18 @@ function applyFix(idx) {
   var isBundle = (unit === '捆' || unit === '扎' || unit === '件' || unit === '吊' || unit === '包');
   var realQty = (isBundle ? (part.bundle || 1) : 1) * qty;
   var code = part.code;
-  if (LAST_MATCHED[code]) LAST_MATCHED[code].qty += realQty;
-  else LAST_MATCHED[code] = { part: part, qty: realQty };
+  // 与原解析结果保持一致：带上自动换算的捆数参考，否则修正行会少一列「相当于多少捆」
+  if (LAST_MATCHED[code]) {
+    LAST_MATCHED[code].qty += realQty;
+    if (part.bundle && LAST_MATCHED[code].autoBundle !== undefined) {
+      LAST_MATCHED[code].autoBundle = Math.floor(LAST_MATCHED[code].qty / part.bundle);
+    }
+  } else {
+    var entry = { part: part, qty: realQty };
+    if (part.bundle) entry.autoBundle = Math.floor(realQty / part.bundle);
+    LAST_MATCHED[code] = entry;
+  }
+  delete FIX_DRAFT[raw];
   LAST_UNMATCHED_LIST.splice(idx, 1);
   var fixes = loadFixes();
   fixes.unshift({ ts: Date.now(), mode: CURRENT_MODE, text: raw, type: type, size: size, qty: qty, unit: unit, code: code });
@@ -2206,13 +2216,28 @@ function applyFix(idx) {
   renderResult(LAST_MATCHED, LAST_UNMATCHED_LIST);
 }
 function skipFix(idx) {
+  var zone = document.getElementById('fix-zone');
+  var row = zone && zone.querySelector('.fix-row[data-idx="' + idx + '"]');
+  if (row) delete FIX_DRAFT[row.dataset.raw];
   LAST_UNMATCHED_LIST.splice(idx, 1);
   renderResult(LAST_MATCHED, LAST_UNMATCHED_LIST);
 }
 function renderFixZone(unmatched) {
   var zone = document.getElementById('fix-zone');
   if (!zone) return;
-  if (!unmatched || unmatched.length === 0) { zone.style.display = 'none'; zone.innerHTML = ''; return; }
+  // 重建前先存草稿（只保留仍在未识别列表里的行），否则多行修正时其他行已填内容会被清空
+  var alive = {};
+  (unmatched || []).forEach(function (r) { alive[r] = true; });
+  zone.querySelectorAll('.fix-row').forEach(function (row) {
+    if (!alive[row.dataset.raw]) return;
+    FIX_DRAFT[row.dataset.raw] = {
+      type: row.querySelector('.fix-type').value,
+      size: row.querySelector('.fix-size').value,
+      qty: row.querySelector('.fix-qty').value,
+      unit: row.querySelector('.fix-unit').value
+    };
+  });
+  if (!unmatched || unmatched.length === 0) { zone.style.display = 'none'; zone.innerHTML = ''; FIX_DRAFT = {}; return; }
   // 套扣体系无斜拉杆（用户 2026-08-31 确认）
   var types = ['立杆', '横杆', '斜拉杆', '顶托', '底座', '架子'];
   if (CURRENT_MODE === 'taokou') types = types.filter(function (t) { return t !== '斜拉杆'; });
@@ -2232,6 +2257,15 @@ function renderFixZone(unmatched) {
         + '</div>';
     }).join('')
     + '<div class="fix-hint">指定后会记住「原文 → 正确配件」，下次照着补规则即可，不用再猜用户想写什么。</div>';
+  // 恢复草稿：多行修正时，其他行已填的类型/规格/数量/单位不丢
+  zone.querySelectorAll('.fix-row').forEach(function (row) {
+    var d = FIX_DRAFT[row.dataset.raw];
+    if (!d) return;
+    row.querySelector('.fix-type').value = d.type;
+    row.querySelector('.fix-size').value = d.size;
+    row.querySelector('.fix-qty').value = d.qty;
+    row.querySelector('.fix-unit').value = d.unit;
+  });
   zone.querySelectorAll('.fix-row').forEach(function (row) {
     var idx = parseInt(row.dataset.idx, 10);
     row.querySelector('.fix-apply').addEventListener('click', function () { applyFix(idx); });
@@ -2386,6 +2420,7 @@ function clearResult() {
   LAST_UNMATCHED = 0;
   LAST_MATCHED = {};
   LAST_UNMATCHED_LIST = [];
+  FIX_DRAFT = {};
   document.getElementById('fix-zone').style.display = 'none';
   document.getElementById('fix-zone').innerHTML = '';
 }
@@ -2410,6 +2445,7 @@ var LAST_MATCHED = {};          // 最近一次识别结果（未识别行修正
 var LAST_UNMATCHED_LIST = [];   // 最近一次未识别原文列表（修正时移除用，v1.6.0）
 var FIX_KEY = 'scaffold_fixes'; // 人工修正的标注样本：原文 → 正确答案（v1.6.0）
 var FIX_MAX = 200;
+var FIX_DRAFT = {};             // 修正区草稿（raw → {type,size,qty,unit}），重建时不丢用户输入（v1.6.0）
 // 单条重量超过此值（kg）提示确认，防止多输 0
 var ABNORMAL_KG = 300000;
 
@@ -2581,16 +2617,22 @@ function copyList() {
   lines.push(['合计', '', '', '', '', fmt(sum.count) + '件', fmt(sum.kg / 1000)].join('\t'));
   lines.push('总重量：' + fmt(sum.kg / 1000) + ' 吨 (' + fmt(sum.kg) + ' kg)');
   var text = lines.join('\n');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function(){ showToast('清单已复制'); }, function(){ fallbackCopy(text); });
-  } else { fallbackCopy(text); }
+  copyText(text, '清单已复制');
 }
-function fallbackCopy(text) {
+function fallbackCopy(text, msg) {
   var ta = document.createElement('textarea');
   ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); showToast('清单已复制'); }
+  try { document.execCommand('copy'); showToast(msg || '已复制'); }
   catch(e) { showToast('复制失败，请手动选择'); }
   document.body.removeChild(ta);
+}
+// 剪贴板复制统一入口（清单/JSON/报告/分享链接四处共用；降级走 fallbackCopy 也用同一个 msg，不会串台）
+function copyText(text, msg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){ showToast(msg); }, function(){ fallbackCopy(text, msg); });
+  } else {
+    fallbackCopy(text, msg);
+  }
 }
 
 function exportExcel() {
@@ -2884,11 +2926,7 @@ function exportFailuresJSON() {
   var arr = loadFailures();
   if (arr.length === 0) { showToast('暂无样本可导出'); return; }
   var json = JSON.stringify(arr, null, 2);
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(json).then(function(){ showToast('已复制 JSON 到剪贴板'); }, function(){ fallbackCopy(json); });
-  } else {
-    fallbackCopy(json);
-  }
+  copyText(json, 'JSON 已复制到剪贴板');
 }
 // 把数字归一成 #，得到「写法模式」（v1.6.0 报告聚合用）
 function normalizePattern(s) {
@@ -2945,11 +2983,7 @@ function buildReport() {
 }
 function exportFixesReport() {
   var report = buildReport();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(report).then(function(){ showToast('已复制待补规则报告'); }, function(){ fallbackCopy(report); });
-  } else {
-    fallbackCopy(report);
-  }
+  copyText(report, '待补规则报告已复制');
 }
 function clearFailures() {
   if (!confirm('确定清空所有未识别样本？')) return;
@@ -3117,9 +3151,7 @@ function shareLink() {
   url += 'd2=' + LZString.compressToEncodedURIComponent(text); // v1.4.0：LZ 压缩分享链接（旧 d= 链接仍兼容）
   if (rEl && rEl.value.trim()) url += '&r=' + encodeURIComponent(rEl.value.trim());
   var msg = url.length > 4000 ? '清单较长，链接可能超长，建议用导出功能' : '分享链接已复制';
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(function(){ showToast(msg); }, function(){ fallbackCopy(url); showToast(msg); });
-  } else { fallbackCopy(url); showToast(msg); }
+  copyText(url, msg);
 }
 
 // 配件设置
