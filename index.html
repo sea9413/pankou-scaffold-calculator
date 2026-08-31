@@ -67,17 +67,6 @@
   }
   textarea:focus { border-color: #3b82f6; }
 
-  .hint {
-    font-size: 12px;
-    color: #888;
-    background: #f8f9fa;
-    border-left: 3px solid #3b82f6;
-    padding: 8px 10px;
-    margin-top: 10px;
-    border-radius: 0 4px 4px 0;
-    white-space: pre-line;
-  }
-
   .btn-primary {
     background: #3b82f6;
     color: #fff;
@@ -125,6 +114,86 @@
     line-height: 1.4;
     padding: 8px;
   }
+
+  /* ============ 输入说明（可折叠） ============ */
+  .help-card {
+    margin-top: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .help-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: #f8f9fa;
+    border: none;
+    padding: 9px 12px;
+    font-size: 13px;
+    color: #555;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .help-toggle:hover { background: #f0f1f3; }
+  .help-toggle b { color: #3b82f6; font-weight: 600; }
+  .help-arrow {
+    font-size: 10px;
+    color: #999;
+    transition: transform .2s;
+    flex-shrink: 0;
+  }
+  .help-arrow.up { transform: rotate(180deg); }
+  .help-body {
+    padding: 12px;
+    border-top: 1px solid #eef0f2;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.7;
+  }
+  .help-sec { margin-bottom: 12px; }
+  .help-sec:last-of-type { margin-bottom: 10px; }
+  .help-sec > .help-t {
+    font-weight: 600;
+    color: #333;
+    font-size: 12px;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .help-code {
+    background: #f8f9fa;
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 4px 4px 0;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #444;
+    white-space: pre-line;
+    font-family: inherit;
+  }
+  .help-list { margin: 0; padding-left: 16px; }
+  .help-list li { margin-bottom: 2px; }
+  .help-list code {
+    background: #f0f1f3;
+    border-radius: 3px;
+    padding: 0 4px;
+    font-family: inherit;
+    color: #333;
+  }
+  .help-fill {
+    width: 100%;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .help-fill:hover { background: #dbeafe; }
 
   .result-section { display: none; }
   .result-section.show { display: block; }
@@ -265,14 +334,14 @@
 
   @media print {
     body { background: #fff; padding: 0; }
-    .mode-tabs, .input-row, .btn-primary, .hint, .action-row, .toolbar, .footer, #settings-card, label[for="input"], .col-act, .del-row, textarea#input { display: none !important; }
+    .mode-tabs, .input-row, .btn-primary, .action-row, .toolbar, .footer, #settings-card, .col-act, .del-row, textarea#input, .help-card { display: none !important; }
     .wrap { max-width: none; }
     .card { box-shadow: none; border: none; padding: 4px 0; }
     .result-section { display: block !important; }
     .total-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     td input.qty, td input.bundle-qty { border: none; padding: 0; width: auto; }
     /* 备注参与打印 */
-    .remark-card textarea { border: none; padding: 0; resize: none; min-height: 0 !important; }
+    .remark-input { border: none !important; padding: 0 !important; resize: none; min-height: 0 !important; background: transparent !important; }
     .table-wrap { overflow: visible; }
   }
 </style>
@@ -286,26 +355,57 @@
 
   <!-- 输入区 -->
   <div class="card">
-    <label class="label" for="input">把清单贴在这里</label>
-
     <div class="mode-tabs">
       <button id="tab-pankou" class="tab-btn active">盘扣</button>
       <button id="tab-taokou" class="tab-btn">套扣</button>
     </div>
 
     <div class="input-row">
-      <textarea id="input" placeholder="一行一种配件，写清楚规格和支数即可。比如：
-立杆1米100支
-横杆0.55米200支
-斜拉杆1.71米50支
-顶托 50 支
-底座 30 套
-
-也可以写「几扎」「几捆」，会自动乘上每捆多少支：
-立杆2.5米11扎
-横杆0.6 4扎
-横杆0.9 3捆"></textarea>
+      <textarea id="input" placeholder="把清单贴进来，一行一种配件。不确定写法可展开下方「输入说明」。"></textarea>
       <button class="btn-secondary" id="btn-reset">重新<br>输入</button>
+    </div>
+
+    <!-- 输入说明（可折叠） -->
+    <div class="help-card">
+      <button class="help-toggle" id="help-toggle" type="button" aria-expanded="false" aria-controls="help-body">
+        <span><b>输入说明</b> · 支持哪些写法</span>
+        <span class="help-arrow" id="help-arrow">▼</span>
+      </button>
+      <div class="help-body" id="help-body" style="display:none;">
+
+        <div class="help-sec">
+          <span class="help-t">常见写法（任选一种，不必照抄）</span>
+          <div class="help-code" id="help-sample"></div>
+        </div>
+
+        <div class="help-sec">
+          <span class="help-t">快捷前缀（不区分大小写）</span>
+          <ul class="help-list">
+            <li><code>LG</code>=立杆、<code>HG</code>=横杆、<code>XLG</code>=斜拉杆，如 <code>LG2.5 100支</code></li>
+            <li>单字母也行：<code>L</code>=立杆、<code>H</code>=横杆、<code>X</code>=斜拉杆，如 <code>L2.5 100支</code></li>
+            <li>数字在前也可以：<code>2.5立杆</code>、<code>0.9横杆</code>、<code>1.71斜拉杆</code></li>
+            <li>只写数字会自动归类，如 <code>2.5 1000</code>、<code>0.9 2000</code></li>
+          </ul>
+        </div>
+
+        <div class="help-sec">
+          <span class="help-t">打包单位（自动乘每捆支数）</span>
+          <ul class="help-list">
+            <li>写「扎 / 捆 / 件 / 吊」会自动换算，如 <code>立杆2.5米11扎</code></li>
+            <li>分隔符用 <code>×</code> <code>x</code> <code>X</code> 也认，如 <code>LG2.5×9捆</code></li>
+          </ul>
+        </div>
+
+        <div class="help-sec">
+          <span class="help-t">分隔符</span>
+          <ul class="help-list">
+            <li>换行、<code>/</code>、<code>、</code>、<code>,</code>、<code>|</code> 都能分开多条</li>
+            <li>例：<code>立杆2.5 100支/横杆0.6 200支</code></li>
+          </ul>
+        </div>
+
+        <button class="help-fill" id="btn-fill-demo" type="button">填入示例清单试试</button>
+      </div>
     </div>
 
     <button class="btn-primary" id="btn-calc">开始计算</button>
@@ -315,6 +415,7 @@
       <div class="warn" id="warn" style="display:none;"></div>
 
       <div class="card" style="margin:12px 0 0;">
+        <textarea id="remark" class="remark-input" placeholder="备注（选填）：项目名称" style="min-height:38px;"></textarea>
         <label class="label">明细</label>
         <div class="table-wrap">
           <table id="detail-table">
@@ -351,13 +452,6 @@
       </div>
     </div>
 
-    <div class="hint" id="hint">支持自然语言整句。格式示例：
-· 2.5米立杆4000条 / 0.3米立杆500个（推荐，新格式）
-· 立杆2.5 4000支 / 横杆0.6 2000条 / 上托1600个（兼容）
-· 2.5 4000 / 0.6 2000 / 1.71 50（纯数字兜底）
-· 立杆2.5 15扎 / 横杆0.9 20捆（打包单位自动换算）
-· 简称：LG/HG/XLG、L/H/X 前缀（均不区分大小写）
-扎/捆/件/吊 = 打包单位，自动乘以每捆支数。</div>
   </div>
 
   <!-- 快捷操作：模板 + 项目 -->
@@ -401,12 +495,6 @@
     </div>
   </div>
 
-  <!-- 备注区 -->
-  <div class="card remark-card">
-    <label class="label" for="remark">备注（可选）</label>
-    <textarea id="remark" style="min-height:60px;" placeholder="比如：某项目 A 区"></textarea>
-  </div>
-
   <!-- 页脚 -->
   <div class="footer">
     <span id="footer-ver"></span> &nbsp;|&nbsp; 开发者：sea9413
@@ -417,7 +505,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.1.1';
+  var VER = 'v1.2.0';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -1815,11 +1903,12 @@ function showToast(msg) {
 }
 
 // ============ 模式文本 ============
-const PLACEHOLDER_PANKOU = '一行一种配件，写清楚规格和支数即可。比如：\n立杆1米100支\n横杆0.55米200支\n斜拉杆1.71米50支\n顶托 50 支\n底座 30 套\n\n也可以写「几扎」「几捆」，会自动乘上每捆多少支：\n立杆2.5米11扎\n横杆0.6 4扎\n横杆0.9 3捆';
-const PLACEHOLDER_TAOKOU = '一行一种配件，写清楚规格和支数即可。比如：\n立杆1米100支\n横杆0.6 200支\n斜拉杆1.71 50支\n顶托 50 个\n底座 30 套\n\n也可以写「几扎」「几捆」，会自动乘上每捆多少支：\n立杆2.5米11扎\n横杆0.6 4扎\n横杆0.9 3捆';
+const PLACEHOLDER_PANKOU = '把清单贴进来，一行一种配件。不确定写法可展开下方「输入说明」。';
+const PLACEHOLDER_TAOKOU = '把清单贴进来，一行一种配件（立杆/横杆/斜拉杆/顶托/底座）。';
 
-const HINT_PANKOU = '支持自然语言整句。格式示例：\n· 2.5米立杆4000条 / 0.3米立杆500个（推荐，新格式）\n· 立杆2.5 4000支 / 横杆0.6 2000条 / 上托1600个（兼容）\n· 2.5 4000 / 0.6 2000 / 1.71 50（纯数字兜底）\n· 立杆2.5 15扎 / 横杆0.9 20捆（打包单位自动换算）\n· 简称：LG/HG/XLG、L/H/X 前缀（均不区分大小写）\n扎/捆/件/吊 = 打包单位，自动乘以每捆支数。';
-const HINT_TAOKOU = '套扣模式支持：立杆、横杆、斜拉杆、顶托、底座。<b>快捷写法（不区分大小写）：</b>LG=立杆、HG=横杆、XLG=斜拉杆，如「LG1.0 100支 / XLG1.71 50支」；也可用单字母前缀「L2.5 100支 / H0.9 50支 / X1.71 50支」。支持数字在前：2.5立杆、0.9横杆、1.71斜拉杆；纯数字行自动归类：0.9→横杆、1.71→斜拉杆等。写「几扎/几捆/几件/几吊」会自动乘上每捆支数。斜拉杆目前内置 1.71m 一款，其他规格或配件可在下方「⚙️ 配件设置」里自定义。';
+// 「输入说明」里的示例清单（与模板保持一致，按模式切换）
+const SAMPLE_PANKOU = '立杆1米100支\n横杆0.55米200支\n斜拉杆1.71米50支\n顶托 50 支\n底座 30 套\n立杆2.5米11扎\n横杆0.6 4扎\n横杆0.9 3捆';
+const SAMPLE_TAOKOU = '立杆1米100支\n横杆0.6 200支\n斜拉杆1.71 50支\n顶托 50 个\n底座 30 套\nLG2.5×9捆';
 
 // ============ 事件绑定 ============
 function doCalc() {
@@ -1829,6 +1918,29 @@ function doCalc() {
   renderResult(matched, unmatched);
 }
 document.getElementById('btn-calc').addEventListener('click', doCalc);
+
+// ============ 输入说明：展开 / 收起 / 填入示例 ============
+const helpToggle = document.getElementById('help-toggle');
+const helpBody   = document.getElementById('help-body');
+const helpArrow  = document.getElementById('help-arrow');
+const helpSample = document.getElementById('help-sample');
+
+function setHelpOpen(open) {
+  helpBody.style.display = open ? 'block' : 'none';
+  helpArrow.classList.toggle('up', open);
+  helpToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  try { localStorage.setItem('helpOpen', open ? '1' : '0'); } catch (e) {}
+}
+helpToggle.addEventListener('click', function () {
+  setHelpOpen(helpBody.style.display === 'none');
+});
+
+document.getElementById('btn-fill-demo').addEventListener('click', function () {
+  document.getElementById('input').value = (CURRENT_MODE === 'taokou') ? SAMPLE_TAOKOU : SAMPLE_PANKOU;
+  clearResult();
+  showToast('已填入示例，点「开始计算」试试');
+  document.getElementById('input').focus();
+});
 
 document.getElementById('btn-reset').addEventListener('click', () => {
   document.getElementById('input').value = '';
@@ -1855,11 +1967,11 @@ function switchMode(mode) {
   document.getElementById('tab-taokou').classList.toggle('active', !isPankou);
   // 清空结果
   clearResult();
-  // 动态更新标题/提示/占位
+  // 动态更新标题/占位/示例
   document.getElementById('subtitle').textContent = isPankou ? '盘扣模式 · 把清单贴进来，自动算重量' : '套扣模式 · 把清单贴进来，自动算重量';
-  const hint = document.getElementById('hint');
-  hint.innerHTML = isPankou ? HINT_PANKOU : HINT_TAOKOU;
   document.getElementById('input').placeholder = isPankou ? PLACEHOLDER_PANKOU : PLACEHOLDER_TAOKOU;
+  // 输入说明里的示例随模式切换
+  helpSample.textContent = isPankou ? SAMPLE_PANKOU : SAMPLE_TAOKOU;
 }
 
 document.getElementById('tab-pankou').addEventListener('click', () => switchMode('pankou'));
@@ -2034,6 +2146,14 @@ document.getElementById('btn-add-part').addEventListener('click', addCustomPart)
       if (dr) document.getElementById('remark').value = dr;
       setTimeout(doCalc, 300);
     }
+  } catch(e) {}
+})();
+
+// 初始化：填示例文本 + 恢复「输入说明」展开状态
+(function(){
+  helpSample.textContent = (CURRENT_MODE === 'taokou') ? SAMPLE_TAOKOU : SAMPLE_PANKOU;
+  try {
+    if (localStorage.getItem('helpOpen') === '1') setHelpOpen(true);
   } catch(e) {}
 })();
 
