@@ -94,6 +94,16 @@
   }
   .btn-secondary:hover { background: #e5e7eb; }
 
+  /* 输入框下方的快捷填入（v1.6.0） */
+  .quick-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .quick-tip { font-size: 12px; color: #888; }
+
   .input-row {
     display: flex;
     gap: 10px;
@@ -163,6 +173,15 @@
     margin-bottom: 4px;
     display: block;
   }
+  /* 示例每行可点击（v1.6.0） */
+  .help-line {
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: pre-wrap;
+  }
+  .help-line:hover { background: #e8f1ff; color: #2563eb; }
+
   .help-code {
     background: #f8f9fa;
     border-left: 3px solid #3b82f6;
@@ -209,6 +228,19 @@
     white-space: pre-line;
   }
   .warn b { color: #842029; }
+
+  /* 未识别行当场修正区（v1.6.0） */
+  .fix-zone { background: #fff8e6; border: 1px solid #f3d28a; border-radius: 8px; padding: 10px 12px; margin: 10px 0 0; }
+  .fix-title { font-size: 13px; font-weight: 600; color: #8a5a00; margin-bottom: 6px; }
+  .fix-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed #f0dfb8; }
+  .fix-text { flex: 1 1 100%; font-size: 13px; color: #333; word-break: break-all; }
+  .fix-row select, .fix-row input { font-size: 13px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; }
+  .fix-size { width: 64px; }
+  .fix-qty { width: 72px; }
+  .fix-apply { background: #3b82f6; color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .fix-apply:hover { background: #2563eb; }
+  .fix-skip { background: none; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer; color: #666; }
+  .fix-hint { font-size: 12px; color: #999; margin-top: 6px; }
 
   table {
     width: 100%;
@@ -445,6 +477,11 @@
       <button class="btn-secondary" id="btn-reset">重新<br>输入</button>
     </div>
 
+    <div class="quick-row">
+      <button class="btn-mini" id="btn-fill-sample" type="button">📋 填入示例清单</button>
+      <span class="quick-tip">不确定写法先填一份试试；展开下方「输入说明」可逐行点选示例</span>
+    </div>
+
     <!-- 输入说明（可折叠） -->
     <div class="help-card">
       <button class="help-toggle" id="help-toggle" type="button" aria-expanded="false" aria-controls="help-body">
@@ -493,6 +530,9 @@
     <!-- 结果区（计算后显示） -->
     <div class="result-section" id="result">
       <div class="warn" id="warn" style="display:none;"></div>
+
+      <!-- 未识别行当场修正（v1.6.0） -->
+      <div class="fix-zone" id="fix-zone" style="display:none;"></div>
 
       <div class="card" style="margin:12px 0 0;">
         <textarea id="remark" class="remark-input" placeholder="备注（选填）：项目名称" style="min-height:38px;"></textarea>
@@ -609,7 +649,8 @@
     <div class="modal-subtitle" id="samples-count">共 0 条</div>
     <div class="modal-body" id="samples-list"></div>
     <div class="modal-actions">
-      <button class="btn-mini" id="btn-export-samples">📋 导出 JSON</button>
+      <button class="btn-mini" id="btn-export-samples">📋 导出待补规则报告</button>
+      <button class="btn-mini" id="btn-export-samples-json">{} 原始 JSON</button>
       <button class="btn-mini" id="btn-clear-samples">🗑️ 清空</button>
     </div>
   </div>
@@ -618,7 +659,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.5.0';
+  var VER = 'v1.6.0';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -2105,12 +2146,97 @@ function renderResult(matched, unmatched) {
 
   // 未识别行数（供总重量旁角标使用）
   LAST_UNMATCHED = unmatched.length;
+  // v1.6.0：保存本次结果用于未识别行当场修正（合并 / 移除 / 重渲染）
+  LAST_MATCHED = matched;
+  LAST_UNMATCHED_LIST = unmatched.slice();
+  renderFixZone(unmatched);
 
   // 合计
   updateTotal();
 
   // 显示结果区
   document.getElementById('result').classList.add('show');
+}
+
+// ============ 未识别行当场修正（v1.6.0 核心）============
+// 用户当场指定未识别行是什么配件 → 立即计入结果 + 产出带正确答案的标注样本
+function findPartByTypeSize(type, size) {
+  var parts = (getPARTS() || []).filter(function (p) { return p.type === type; });
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0]; // 顶托/底座/架子：无规格
+  var s = String(size == null ? '' : size).trim();
+  if (!s) return null;
+  var num = parseFloat(s);
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].matcher && parts[i].matcher.indexOf(s) >= 0) return parts[i];
+  }
+  for (var j = 0; j < parts.length; j++) {
+    if (String(parts[j].size).indexOf(s) === 0) return parts[j];
+  }
+  if (!isNaN(num)) {
+    for (var k = 0; k < parts.length; k++) {
+      if (parseFloat(parts[k].size) === num) return parts[k];
+    }
+  }
+  return null;
+}
+function applyFix(idx) {
+  var zone = document.getElementById('fix-zone');
+  var row = zone.querySelector('.fix-row[data-idx="' + idx + '"]');
+  if (!row) return;
+  var raw = row.dataset.raw;
+  var type = row.querySelector('.fix-type').value;
+  var size = row.querySelector('.fix-size').value.trim();
+  var qty = parseFloat(row.querySelector('.fix-qty').value);
+  var unit = row.querySelector('.fix-unit').value;
+  if (!qty || qty <= 0) { showToast('请填写数量'); return; }
+  var part = findPartByTypeSize(type, size);
+  if (!part) { showToast('没找到「' + type + (size ? ' ' + size : '') + '」规格，检查数字或换类型'); return; }
+  var isBundle = (unit === '捆' || unit === '扎' || unit === '件' || unit === '吊' || unit === '包');
+  var realQty = (isBundle ? (part.bundle || 1) : 1) * qty;
+  var code = part.code;
+  if (LAST_MATCHED[code]) LAST_MATCHED[code].qty += realQty;
+  else LAST_MATCHED[code] = { part: part, qty: realQty };
+  LAST_UNMATCHED_LIST.splice(idx, 1);
+  var fixes = loadFixes();
+  fixes.unshift({ ts: Date.now(), mode: CURRENT_MODE, text: raw, type: type, size: size, qty: qty, unit: unit, code: code });
+  if (fixes.length > FIX_MAX) fixes.length = FIX_MAX;
+  try { localStorage.setItem(FIX_KEY, JSON.stringify(fixes)); } catch (e) {}
+  showToast('已加入：' + code + ' × ' + realQty);
+  renderResult(LAST_MATCHED, LAST_UNMATCHED_LIST);
+}
+function skipFix(idx) {
+  LAST_UNMATCHED_LIST.splice(idx, 1);
+  renderResult(LAST_MATCHED, LAST_UNMATCHED_LIST);
+}
+function renderFixZone(unmatched) {
+  var zone = document.getElementById('fix-zone');
+  if (!zone) return;
+  if (!unmatched || unmatched.length === 0) { zone.style.display = 'none'; zone.innerHTML = ''; return; }
+  // 套扣体系无斜拉杆（用户 2026-08-31 确认）
+  var types = ['立杆', '横杆', '斜拉杆', '顶托', '底座', '架子'];
+  if (CURRENT_MODE === 'taokou') types = types.filter(function (t) { return t !== '斜拉杆'; });
+  var typeOpts = types.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  var unitOpts = ['支', '个', '套', '捆', '扎', '件', '吊', '包'].map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
+  zone.style.display = 'block';
+  zone.innerHTML = '<div class="fix-title">⚠️ 有 ' + unmatched.length + ' 行没识别出来，可直接指定（选完立即计入总重量）</div>'
+    + unmatched.map(function (raw, i) {
+      return '<div class="fix-row" data-idx="' + i + '" data-raw="' + escapeHtml(raw) + '">'
+        + '<span class="fix-text">' + escapeHtml(raw) + '</span>'
+        + '<select class="fix-type">' + typeOpts + '</select>'
+        + '<input class="fix-size" placeholder="规格" title="如 2.5 / 0.9 / 1.71；顶托底座留空">'
+        + '<input class="fix-qty" type="number" min="1" step="1" placeholder="数量">'
+        + '<select class="fix-unit">' + unitOpts + '</select>'
+        + '<button class="fix-apply" type="button">加入</button>'
+        + '<button class="fix-skip" type="button">忽略</button>'
+        + '</div>';
+    }).join('')
+    + '<div class="fix-hint">指定后会记住「原文 → 正确配件」，下次照着补规则即可，不用再猜用户想写什么。</div>';
+  zone.querySelectorAll('.fix-row').forEach(function (row) {
+    var idx = parseInt(row.dataset.idx, 10);
+    row.querySelector('.fix-apply').addEventListener('click', function () { applyFix(idx); });
+    row.querySelector('.fix-skip').addEventListener('click', function () { skipFix(idx); });
+  });
 }
 
 function onQtyChange(e) {
@@ -2258,6 +2384,10 @@ function clearResult() {
   LAST_TOTAL_KG = 0;
   LAST_TOTAL_COUNT = 0;
   LAST_UNMATCHED = 0;
+  LAST_MATCHED = {};
+  LAST_UNMATCHED_LIST = [];
+  document.getElementById('fix-zone').style.display = 'none';
+  document.getElementById('fix-zone').innerHTML = '';
 }
 
 // 删除某一行明细
@@ -2276,6 +2406,10 @@ function onDeleteRow(e) {
 var LAST_TOTAL_KG = 0;
 var LAST_TOTAL_COUNT = 0;
 var LAST_UNMATCHED = 0; // 最近一次计算的未识别行数（总重量旁角标）
+var LAST_MATCHED = {};          // 最近一次识别结果（未识别行修正时合并用，v1.6.0）
+var LAST_UNMATCHED_LIST = [];   // 最近一次未识别原文列表（修正时移除用，v1.6.0）
+var FIX_KEY = 'scaffold_fixes'; // 人工修正的标注样本：原文 → 正确答案（v1.6.0）
+var FIX_MAX = 200;
 // 单条重量超过此值（kg）提示确认，防止多输 0
 var ABNORMAL_KG = 300000;
 
@@ -2742,7 +2876,11 @@ function closeFailureModal() {
   var modal = document.getElementById('samples-modal');
   if (modal) modal.style.display = 'none';
 }
-function exportFailures() {
+function loadFixes() {
+  try { return JSON.parse(localStorage.getItem(FIX_KEY) || '[]'); } catch (e) { return []; }
+}
+// 原始 JSON 导出（{} 按钮，保留底层数据）
+function exportFailuresJSON() {
   var arr = loadFailures();
   if (arr.length === 0) { showToast('暂无样本可导出'); return; }
   var json = JSON.stringify(arr, null, 2);
@@ -2750,6 +2888,67 @@ function exportFailures() {
     navigator.clipboard.writeText(json).then(function(){ showToast('已复制 JSON 到剪贴板'); }, function(){ fallbackCopy(json); });
   } else {
     fallbackCopy(json);
+  }
+}
+// 把数字归一成 #，得到「写法模式」（v1.6.0 报告聚合用）
+function normalizePattern(s) {
+  return String(s).replace(/\d+(\.\d+)?/g, '#');
+}
+function fmtNow() {
+  var t = new Date();
+  var p = function (n) { return ('0' + n).slice(-2); };
+  return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
+}
+// 待补规则报告：未识别按写法模式聚合 + 已修正标注（v1.6.0 核心）
+function buildReport() {
+  var failures = loadFailures();
+  var fixes = loadFixes();
+  var lines = [];
+  lines.push('=== 待补规则报告 ===');
+  lines.push('生成时间：' + fmtNow());
+  var groups = {};
+  failures.forEach(function (r) {
+    (r.unmatched || []).forEach(function (line) {
+      var pat = normalizePattern(line);
+      var key = r.mode + '|' + pat;
+      if (!groups[key]) groups[key] = { mode: r.mode, pat: pat, n: 0, example: line };
+      groups[key].n++;
+    });
+  });
+  var arr = Object.keys(groups).map(function (k) { return groups[k]; });
+  arr.sort(function (a, b) { return b.n - a.n; });
+  var totalRaw = 0;
+  failures.forEach(function (r) { totalRaw += (r.unmatched || []).length; });
+  lines.push('未识别样本：去重 ' + arr.length + ' 种写法 / 共 ' + totalRaw + ' 行');
+  lines.push('已人工修正：' + fixes.length + ' 条');
+  lines.push('');
+  lines.push('— 未识别：按写法模式分组（TOP 10，数字已归一为 #）—');
+  if (arr.length === 0) lines.push('（暂无）');
+  arr.slice(0, 10).forEach(function (g) {
+    lines.push('[' + g.n + '次] ' + (g.mode === 'taokou' ? '套扣' : '盘扣') + ' | ' + g.pat + '   示例：' + g.example);
+  });
+  lines.push('');
+  lines.push('— 已人工修正（照着补规则即可：原文 → 正确配件）—');
+  if (fixes.length === 0) lines.push('（暂无，去结果区未识别行点「加入」即可生成）');
+  fixes.forEach(function (f) {
+    lines.push((f.mode === 'taokou' ? '套扣' : '盘扣') + ' | "' + f.text + '" → ' + f.type + ' ' + f.size + ' (' + f.code + ') × ' + f.qty + f.unit);
+  });
+  lines.push('');
+  lines.push('— 未识别原文明细 —');
+  if (failures.length === 0) lines.push('（暂无）');
+  failures.forEach(function (r) {
+    (r.unmatched || []).forEach(function (line) {
+      lines.push('[' + (r.mode === 'taokou' ? '套扣' : '盘扣') + '] ' + line);
+    });
+  });
+  return lines.join('\n');
+}
+function exportFixesReport() {
+  var report = buildReport();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(report).then(function(){ showToast('已复制待补规则报告'); }, function(){ fallbackCopy(report); });
+  } else {
+    fallbackCopy(report);
   }
 }
 function clearFailures() {
@@ -2764,7 +2963,8 @@ document.getElementById('link-samples').addEventListener('click', function(e){
   openFailureModal();
 });
 document.getElementById('samples-close').addEventListener('click', closeFailureModal);
-document.getElementById('btn-export-samples').addEventListener('click', exportFailures);
+document.getElementById('btn-export-samples').addEventListener('click', exportFixesReport);
+document.getElementById('btn-export-samples-json').addEventListener('click', exportFailuresJSON);
 document.getElementById('btn-clear-samples').addEventListener('click', clearFailures);
 document.getElementById('samples-modal').addEventListener('click', function(e){
   if (e.target === this) closeFailureModal();
@@ -2786,12 +2986,32 @@ helpToggle.addEventListener('click', function () {
   setHelpOpen(helpBody.style.display === 'none');
 });
 
-document.getElementById('btn-fill-demo').addEventListener('click', function () {
+// 填入整份示例（v1.6.0：输入框下方按钮与说明面板按钮共用）
+function fillDemo() {
   document.getElementById('input').value = (CURRENT_MODE === 'taokou') ? SAMPLE_TAOKOU : SAMPLE_PANKOU;
   clearResult();
   showToast('已填入示例，点「开始计算」试试');
   document.getElementById('input').focus();
-});
+}
+document.getElementById('btn-fill-demo').addEventListener('click', fillDemo);
+document.getElementById('btn-fill-sample').addEventListener('click', fillDemo);
+
+// 示例每行可点击：点一下把这行追加进输入框（v1.6.0，降低上手成本）
+function renderHelpSample() {
+  var text = (CURRENT_MODE === 'taokou') ? SAMPLE_TAOKOU : SAMPLE_PANKOU;
+  helpSample.innerHTML = text.split('\n').map(function (line) {
+    return '<div class="help-line" data-line="' + escapeHtml(line) + '" title="点击把这行填进输入框">' + escapeHtml(line) + '</div>';
+  }).join('');
+  helpSample.querySelectorAll('.help-line').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var inp = document.getElementById('input');
+      var cur = inp.value.replace(/\s+$/, '');
+      inp.value = (cur ? cur + '\n' : '') + el.dataset.line;
+      inp.focus();
+      showToast('已填入：' + el.dataset.line);
+    });
+  });
+}
 
 document.getElementById('btn-reset').addEventListener('click', () => {
   document.getElementById('input').value = '';
@@ -2821,8 +3041,8 @@ function switchMode(mode) {
   // 动态更新标题/占位/示例
   document.getElementById('subtitle').textContent = isPankou ? '盘扣模式 · 把清单贴进来，自动算重量' : '套扣模式 · 把清单贴进来，自动算重量';
   document.getElementById('input').placeholder = isPankou ? PLACEHOLDER_PANKOU : PLACEHOLDER_TAOKOU;
-  // 输入说明里的示例随模式切换
-  helpSample.textContent = isPankou ? SAMPLE_PANKOU : SAMPLE_TAOKOU;
+  // 输入说明里的示例随模式切换（v1.6.0 起每行可点击）
+  renderHelpSample();
 }
 
 document.getElementById('tab-pankou').addEventListener('click', () => switchMode('pankou'));
@@ -3033,7 +3253,7 @@ truckCapEl.addEventListener('change', function(){
 
 // 初始化：填示例文本 + 恢复「输入说明」展开状态 + 最近计算留痕
 (function(){
-  helpSample.textContent = (CURRENT_MODE === 'taokou') ? SAMPLE_TAOKOU : SAMPLE_PANKOU;
+  renderHelpSample();
   try {
     if (localStorage.getItem('helpOpen') === '1') setHelpOpen(true);
   } catch(e) {}
