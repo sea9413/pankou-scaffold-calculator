@@ -417,7 +417,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.1.0';
+  var VER = 'v1.1.1';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -571,8 +571,12 @@ function parseInputPANKOU(text) {
   const matched = {};
   const unmatched = [];
 
-  for (const line of lines) {
+  for (const rawLine of lines) {
     let hit = false;
+    // x / X / × 作为"规格×数量"的连接符时归一化为空格（如 2.5立杆×9捆 → 2.5立杆 9捆）
+    // 仅在「前面是数字或汉字、后面紧跟数字」时才替换，
+    // 因此 X1.71 / XLG1.71 这类以 X 开头的型号不会被误伤（X 在行首、后面不是数字）
+    const line = rawLine.replace(/([\d\u4e00-\u9fa5])\s*[xX×]\s*(?=\d)/g, '$1 ');
 
     // === 格式1：2.5米立杆4000条 / 2.5立杆4000条（米数+类型+数量） ===
     const unitTypeQty = line.match(/^(\d+(?:\.\d+)?)\s*(?:米|m|M)?\s*(立杆|横杆|斜拉杆|斜杆|斜拉|拉杆|顶托|上托|底座|下托|LG|HG|XLG|XL|XG)\s*(\d+(?:\.\d+)?)?\s*(条|根|支|个|套|扎|捆|件|吊)?/i);
@@ -827,8 +831,18 @@ function parseInputPANKOU(text) {
     const pureNums = line.match(/^(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)?\s*(扎|捆|件|吊)?/);
     if (pureNums) {
       const num = pureNums[1];
-      const qtyRaw = pureNums[2] ? parseFloat(pureNums[2]) : 0;
-      const unit = pureNums[3]||'';
+      // 数量兜底：正则取不到时（如 0.9立杆 5捆，"立杆"挡在规格与数量之间），从整行数字里取第二个
+      let qtyRaw = pureNums[2] ? parseFloat(pureNums[2]) : 0;
+      if (!qtyRaw) {
+        const numsAll = line.match(/(\d+(?:\.\d+)?)/g)||[];
+        if (numsAll.length>=2) qtyRaw = parseFloat(numsAll[1]);
+      }
+      // 单位兜底：正则取不到时（如 1.2立杆 2捆，"立杆"挡在中间），从整行检测打包单位
+      let unit = pureNums[3]||'';
+      if (!unit) {
+        const mUnit = line.match(/(扎|捆|件|吊)/);
+        if (mUnit) unit = mUnit[1];
+      }
       const supportedTypes = [];
       ['立杆','横杆','斜拉杆'].forEach(t => {
         if (fuzzyInsertDotPANKOU(num,t)) supportedTypes.push(t);
@@ -928,8 +942,12 @@ function parseInputTAOKOU(text) {
   const matched = {};
   const unmatched = [];
 
-  for (const line of lines) {
+  for (const rawLine of lines) {
     let hit = false;
+    // x / X / × 作为"规格×数量"的连接符时归一化为空格（如 2.5立杆×9捆 → 2.5立杆 9捆）
+    // 仅在「前面是数字或汉字、后面紧跟数字」时才替换，
+    // 因此 X1.71 / XLG1.71 这类以 X 开头的型号不会被误伤（X 在行首、后面不是数字）
+    const line = rawLine.replace(/([\d\u4e00-\u9fa5])\s*[xX×]\s*(?=\d)/g, '$1 ');
 
     // === 格式1：2.5米立杆4000条 / 2.5立杆4000条 / 0.7米立杆5扎（米数+类型+数量）===
     const unitTypeQty = line.match(/^(\d+(?:\.\d+)?)\s*(?:米|m|M)?\s*(立杆|横杆|斜拉杆|斜杆|斜拉|拉杆|顶托|上托|螺丝头|底座|下托|LG|HG|XLG|XL|XG|L|H|X)\s*(\d+(?:\.\d+)?)?\s*(条|根|支|个|套|扎|捆|件|吊)?/i);
@@ -1306,7 +1324,7 @@ function renderResult(matched, unmatched) {
       tr.innerHTML = `
         <td>${escapeHtml(part.type)}</td>
         <td>${escapeHtml(part.code)}</td>
-        <td>${hasBundle ? '<input type="number" class="bundle-qty" min="0" step="' + (bundleQty !== undefined ? '1' : 'any') + '" value="' + (bundleQty !== undefined ? bundleQty : autoBundle) + '">' : '-'}</td>
+        <td>${hasBundle ? '<input type="number" class="bundle-qty" min="0" step="1" data-prev="' + (bundleQty !== undefined ? bundleQty : autoBundle) + '" value="' + (bundleQty !== undefined ? bundleQty : autoBundle) + '">' : '-'}</td>
         <td>${perCol}</td>
         <td>${hasBundle
           ? '<span class="calc-qty">' + displayQty + u + '</span>'
@@ -1378,11 +1396,25 @@ function onQtyChange(e) {
 }
 
 function onBundleChange(e) {
-  const tr = e.target.closest('tr');
+  const inp = e.target;
+  const tr = inp.closest('tr');
   const code = tr.dataset.code;
   const part = getPARTS().find(p => p.code === code);
-  let bQty = parseFloat(e.target.value);
+  let bQty = parseFloat(inp.value);
   if (isNaN(bQty) || bQty < 0) bQty = 0;
+  // 上下箭头取整：9.8 向上→10、向下→9（若已是整数则按 ±1 步进）
+  const prevVal = parseFloat(inp.dataset.prev);
+  if (!isNaN(prevVal)) {
+    const diff = bQty - prevVal;
+    if (Math.abs(diff) > 0 && Math.abs(diff) <= 1) {
+      bQty = diff > 0
+        ? (Number.isInteger(prevVal) ? prevVal + 1 : Math.ceil(prevVal))
+        : (Number.isInteger(prevVal) ? prevVal - 1 : Math.floor(prevVal));
+      if (bQty < 0) bQty = 0;
+      inp.value = bQty;
+    }
+  }
+  inp.dataset.prev = bQty;
   // 用户一旦手工改了捆数，就以捆数为口径
   tr.dataset.bundleMode = 'explicit';
   // HG-52.5cm 特殊处理：捆模式数量用整捆支数
