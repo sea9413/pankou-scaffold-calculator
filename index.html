@@ -505,7 +505,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.2.0';
+  var VER = 'v1.2.1';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -655,7 +655,12 @@ function fuzzyInsertDotTAOKOU(meter, typeName) {
 
 // ============ 解析逻辑：盘扣 ============
 function parseInputPANKOU(text) {
-  const lines = text.split(/[\n\r\/\|，、]+/).map(l => l.trim()).filter(l => l);
+  // 千分位还原：先把 1,000 这类数字里的逗号去掉，再按分隔符切分
+  // 否则补上"半角逗号作分隔符"后，1,000 会被拆成 "1" 和 "000支" 两段
+  text = String(text).replace(/(\d),(\d{3})(?!\d)/g, '$1$2');
+  // 分隔符：换行 / 回车、斜杠、竖线、顿号、全角逗号、半角逗号
+  // 注意：不要加 \t —— 从 Excel 复制时行内是 tab，加进去会把「立杆\t2.5\t100支」拆散导致全崩
+  const lines = text.split(/[\n\r\/\|，、,]+/).map(l => l.trim()).filter(l => l);
   const matched = {};
   const unmatched = [];
 
@@ -1026,6 +1031,9 @@ function parseInputPANKOU(text) {
 
 // ============ 解析逻辑：套扣 ============
 function parseInputTAOKOU(text) {
+  // 千分位还原：同盘扣，避免 1,000 被半角逗号拆开
+  text = String(text).replace(/(\d),(\d{3})(?!\d)/g, '$1$2');
+  // 分隔符：换行 / 回车、斜杠、竖线、顿号、全角逗号、半角逗号（不含 \t，理由见盘扣）
   const lines = text.split(/[\n\r\/|，、,]+/).map(l => l.trim()).filter(l => l);
   const matched = {};
   const unmatched = [];
