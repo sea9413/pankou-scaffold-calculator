@@ -659,7 +659,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.1';
+  var VER = 'v1.6.2';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -1268,7 +1268,8 @@ const PARTS_TAOKOU = [
   { type: '横杆', code: 'HG-52.5cm', size: '52.5cm', weight: 1.86,  bundle: 420, matcher: ['0.525','0.5250','52.5','525','475','HG475','HG0.475'], extra: { packWeight: 1066, packQty: 420, auxQty: 79, auxCode: 'HG-105cm' } },
   { type: '横杆', code: 'HG-60cm',   size: '60cm',   weight: 2.11,  bundle: 135, matcher: ['0.6','0.60','60','550','HG550','HG0.55'] },
   { type: '横杆', code: 'HG-90cm',   size: '90cm',   weight: 3.11,  bundle: 210, matcher: ['0.9','0.90','90','850','HG850','HG0.85'] },
-  { type: '横杆', code: 'HG-105cm',  size: '105cm',  weight: 3.61,  bundle: 289, matcher: ['1.05','1.050','105','1000','HG1000','HG1.0'] },
+  // HG-105cm 别名（用户 2026-09-02 确认）：1.0米 / 1米 / 1.05 / 105 / 1000 都指这一款
+  { type: '横杆', code: 'HG-105cm',  size: '105cm',  weight: 3.61,  bundle: 289, matcher: ['1.05','1.050','105','1000','HG1000','HG1.0','1.0','1'] },
   { type: '顶托', code: '顶托', size: '套扣顶托', weight: 4.3, bundle: 300 },
   { type: '斜拉杆', code: 'XLG1.71', size: '1.71m', weight: 5.700, bundle: 300, matcher: ['1.71','171','XLG1.71','XL1.71','X1.71'] },
   { type: '底座', code: '底座', size: '38*500', weight: 3.410, bundle: 100 },
@@ -1313,6 +1314,22 @@ function fuzzyInsertDotTAOKOU(meter, typeName) {
   };
   const typeMap = map[typeName];
   return typeMap ? (typeMap[meter] || null) : null;
+}
+
+// ============ 类型关键字探测 ============
+// 行内若明确写了「立杆/横杆/斜拉杆…」或前缀 L/H/X、LG/HG/XLG 等，返回标准类型名；
+// 否则返回 null。纯数字兜底分支据此「尊重用户写的类型」，禁止把「横杆1.3米」
+// 按数字误判成「立杆」（跨类型截胡 bug，2026-09-02 修）。
+function detectTypeKeyword(line) {
+  const m = line.match(/(立杆|拉杆|横杆|斜拉杆|斜杆|斜拉|顶托|上托|螺丝头|底座|下托|LG|HG|XLG|XL|XG|L|H|X)/i);
+  if (!m) return null;
+  const r = m[1].toUpperCase();
+  if (r === 'LG' || r === 'L' || m[1] === '立杆') return '立杆';
+  if (r === 'HG' || r === 'H' || m[1] === '横杆' || m[1] === '拉杆') return '横杆';
+  if (r === 'XLG' || r === 'XL' || r === 'XG' || r === 'X' || m[1] === '斜杆' || m[1] === '斜拉' || m[1] === '斜拉杆') return '斜拉杆';
+  if (m[1] === '顶托' || m[1] === '上托' || m[1] === '螺丝头') return '顶托';
+  if (m[1] === '底座' || m[1] === '下托') return '底座';
+  return null;
 }
 
 // ============ 解析逻辑：盘扣 ============
@@ -1583,9 +1600,12 @@ function parseInputPANKOU(text) {
     if (hit) continue;
 
     // === 格式6：纯数字兜底（2.5 1000 / 2.5 10扎 / 0.9 200 / 1.71 50根） ===
+    // 仅当用户「没写任何类型」时才跨类猜测；行内若已含类型关键字（如 0.9立杆），
+    // 必须尊重该类型，禁止被其他类型按数字截胡（2026-09-02 修）
     const pureNums = line.match(/^(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)?\s*(扎|捆|件|吊|包)?/);
     if (pureNums) {
       const num = pureNums[1];
+      const kwType = detectTypeKeyword(line);
       // 数量兜底：正则取不到时（如 0.9立杆 5捆，"立杆"挡在规格与数量之间），从整行数字里取第二个
       let qtyRaw = pureNums[2] ? parseFloat(pureNums[2]) : 0;
       if (!qtyRaw) {
@@ -1599,7 +1619,7 @@ function parseInputPANKOU(text) {
         if (mUnit) unit = mUnit[1];
       }
       const supportedTypes = [];
-      ['立杆','横杆','斜拉杆'].forEach(t => {
+      (kwType ? [kwType] : ['立杆','横杆','斜拉杆']).forEach(t => {
         if (fuzzyInsertDotPANKOU(num,t)) supportedTypes.push(t);
       });
       if (supportedTypes.length===1) {
@@ -1949,11 +1969,14 @@ function parseInputTAOKOU(text) {
     if (hit) continue;
 
     // === 格式6：纯数字兜底（2.5 1000 / 0.7 500 / 1.05 2000）===
+    // 仅当用户「没写任何类型」时才跨类猜测；行内若已含类型关键字，必须尊重该类型，
+    // 禁止把「横杆1.3米」按数字误判成「立杆」（截胡 bug，2026-09-02 修）
     const pureNums = line.match(/(\d+(?:\.\d+)?)/g);
     if (pureNums && pureNums.length>=1) {
       const num = pureNums[0];
+      const kwType = detectTypeKeyword(line);
       let resolvedPart = null;
-      for (const t of ['立杆','横杆','斜拉杆']) {
+      for (const t of (kwType ? [kwType] : ['立杆','横杆','斜拉杆'])) {
         const f = fuzzyInsertDotTAOKOU(num, t);
         if (f) {
           const p = getPARTS().find(p2=>p2.type===t&&p2.matcher&&p2.matcher.includes(f));
