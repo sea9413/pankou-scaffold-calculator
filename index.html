@@ -543,11 +543,11 @@
               <tr>
                 <th>类型</th>
                 <th>规格型号</th>
-                <th>单重(kg)</th>
                 <th>捆数</th>
                 <th>每捆支数</th>
                 <th>数量</th>
                 <th>小计（吨）</th>
+                <th>单重(kg)</th>
                 <th class="col-act"></th>
               </tr>
             </thead>
@@ -659,7 +659,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.2';
+  var VER = 'v1.6.3';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -2112,13 +2112,13 @@ function renderResult(matched, unmatched) {
       tr.innerHTML = `
         <td>${escapeHtml(part.type)}</td>
         <td>${escapeHtml(part.code)}${modified[part.code] ? '<i class="part-edit-tag" title="该配件单重/每捆已被修改，或为自定义配件">✎</i>' : ''}</td>
-        <td>${fmt(part.weight)}</td>
         <td>${hasBundle ? '<input type="number" class="bundle-qty" min="0" step="1" data-prev="' + (bundleQty !== undefined ? bundleQty : autoBundle) + '" value="' + (bundleQty !== undefined ? bundleQty : autoBundle) + '">' : '-'}</td>
         <td>${perCol}</td>
         <td>${hasBundle
           ? '<span class="calc-qty">' + displayQty + u + '</span>'
           : '<input type="number" class="qty" min="0" step="1" value="' + qty + '">'}</td>
         <td class="subtotal">${subtotal}</td>
+        <td>${fmt(part.weight)}</td>
         <td class="col-act"><button class="del-row" title="删除本行">&times;</button></td>
       `;
       tbody.appendChild(tr);
