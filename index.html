@@ -350,6 +350,37 @@
     font-size: 16px; line-height: 1; padding: 2px 8px; border-radius: 4px;
   }
   .del-row:hover { background: #fdecec; }
+
+  /* 明细表底部的 ➕ 添加配件按钮（手动添加产品行，v1.6.4） */
+  .add-row-btn td { padding: 8px 4px; background: #f8fafc; }
+  .btn-add-row {
+    width: 100%; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 6px;
+    background: #fff; color: #64748b; font-size: 14px; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn-add-row:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+  .add-row-form td { padding: 10px 6px; background: #f8fafc; border-top: 2px solid #3b82f6; }
+  .add-form-inline {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    font-size: 14px; color: #475569;
+  }
+  .add-form-inline select,
+  .add-form-inline input {
+    padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;
+    font-size: 14px; font-family: inherit; box-sizing: border-box;
+  }
+  .add-form-inline .add-size { width: 90px; }
+  .add-form-inline .add-qty { width: 80px; }
+  .btn-add-confirm {
+    padding: 6px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 4px;
+    cursor: pointer; font-size: 14px; font-family: inherit;
+  }
+  .btn-add-confirm:hover { background: #2563eb; }
+  .btn-add-cancel {
+    padding: 6px 12px; background: #e2e8f0; color: #64748b; border: none; border-radius: 4px;
+    cursor: pointer; font-size: 14px; font-family: inherit;
+  }
+  .btn-add-cancel:hover { background: #cbd5e1; }
   .total-count { font-size: 13px; opacity: 0.9; }
 
   /* 总重量区的未识别警告 + 车次估算 */
@@ -659,7 +690,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.3';
+  var VER = 'v1.6.4';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -2083,7 +2114,7 @@ function renderResult(matched, unmatched) {
 
   const codes = Object.keys(matched);
   if (codes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">没有识别到配件</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">没有识别到配件，可手动添加 ↓</td></tr>';
   } else {
     // 已改/自定义配件标记集合（明细表规格型号旁 ✎）
     const cfgNow = getCustomCfg();
@@ -2134,6 +2165,15 @@ function renderResult(matched, unmatched) {
       btn.addEventListener('click', onDeleteRow);
     });
   }
+
+  // 明细表底部 ➕ 添加配件按钮（手动添加产品行，v1.6.4）
+  tbody.insertAdjacentHTML('beforeend',
+    '<tr class="add-row-btn"><td colspan="8">' +
+    '<button class="btn-add-row" type="button">➕ 添加配件</button>' +
+    '</td></tr>'
+  );
+  var addBtnEl = tbody.querySelector('.btn-add-row');
+  if (addBtnEl) addBtnEl.addEventListener('click', showAddForm);
 
   // 警告：未识别 + 异常数量
   const warn = document.getElementById('warn');
@@ -2294,6 +2334,69 @@ function renderFixZone(unmatched) {
     row.querySelector('.fix-apply').addEventListener('click', function () { applyFix(idx); });
     row.querySelector('.fix-skip').addEventListener('click', function () { skipFix(idx); });
   });
+}
+
+// ============ 明细表底部 ➕ 手动添加配件（v1.6.4）============
+// 用户主动追加没识别出的配件（如临时多算的零头、补漏的配件），不走修正区标注样本
+function showAddForm() {
+  var tbody = document.getElementById('detail-body');
+  var btnRow = tbody.querySelector('.add-row-btn');
+  if (!btnRow || btnRow.style.display === 'none') return;
+
+  // 类型下拉：套扣模式隐藏斜拉杆（业务事实 §5.7）
+  var types = ['立杆', '横杆', '斜拉杆', '顶托', '底座', '架子'];
+  if (CURRENT_MODE === 'taokou') types = types.filter(function (t) { return t !== '斜拉杆'; });
+  var typeOpts = types.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  var unitOpts = ['支', '个', '套', '捆', '扎', '件', '吊', '包'].map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
+
+  var formRow = document.createElement('tr');
+  formRow.className = 'add-row-form';
+  formRow.innerHTML = '<td colspan="8">' +
+    '<div class="add-form-inline">' +
+    '<select class="add-type">' + typeOpts + '</select>' +
+    '<input class="add-size" placeholder="规格（如 2.5 / 0.9）">' +
+    '<input class="add-qty" type="number" min="1" step="1" placeholder="数量">' +
+    '<select class="add-unit">' + unitOpts + '</select>' +
+    '<button class="btn-add-confirm" type="button">✓ 加入</button>' +
+    '<button class="btn-add-cancel" type="button">✕ 取消</button>' +
+    '</div></td>';
+
+  btnRow.style.display = 'none';
+  tbody.insertBefore(formRow, btnRow);
+
+  formRow.querySelector('.btn-add-confirm').addEventListener('click', function () { addManualPart(formRow); });
+  formRow.querySelector('.btn-add-cancel').addEventListener('click', function () { cancelAddForm(formRow); });
+  var qtyInput = formRow.querySelector('.add-qty');
+  if (qtyInput) qtyInput.focus();
+}
+function addManualPart(formRow) {
+  var type = formRow.querySelector('.add-type').value;
+  var size = formRow.querySelector('.add-size').value.trim();
+  var qty = parseFloat(formRow.querySelector('.add-qty').value);
+  var unit = formRow.querySelector('.add-unit').value;
+  if (!qty || qty <= 0) { showToast('请填写数量'); return; }
+  var part = findPartByTypeSize(type, size);
+  if (!part) { showToast('没找到「' + type + (size ? ' ' + size : '') + '」规格，检查数字或换类型'); return; }
+  var isBundle = (unit === '捆' || unit === '扎' || unit === '件' || unit === '吊' || unit === '包');
+  var realQty = (isBundle ? (part.bundle || 1) : 1) * qty;
+  if (LAST_MATCHED[part.code]) {
+    LAST_MATCHED[part.code].qty += realQty;
+    if (part.bundle && LAST_MATCHED[part.code].autoBundle !== undefined) {
+      LAST_MATCHED[part.code].autoBundle = Math.floor(LAST_MATCHED[part.code].qty / part.bundle);
+    }
+  } else {
+    var entry = { part: part, qty: realQty };
+    if (part.bundle) entry.autoBundle = Math.floor(realQty / part.bundle);
+    LAST_MATCHED[part.code] = entry;
+  }
+  showToast('已添加：' + part.code + ' × ' + realQty);
+  renderResult(LAST_MATCHED, LAST_UNMATCHED_LIST);
+}
+function cancelAddForm(formRow) {
+  var tbody = document.getElementById('detail-body');
+  var btnRow = tbody.querySelector('.add-row-btn');
+  formRow.remove();
+  if (btnRow) btnRow.style.display = '';
 }
 
 function onQtyChange(e) {
