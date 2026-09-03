@@ -690,7 +690,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.5';
+  var VER = 'v1.6.6';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -717,6 +717,8 @@ document.addEventListener('DOMContentLoaded', function(){
       window.EXPERIMENTAL = true;
     }
   } catch(e) {}
+  // v1.6.6：初始化即显示空结果区（含 ➕ 按钮），未点「开始计算」也能手动添加配件
+  renderResult({}, []);
 });
 
 // ============ LZ 字符串压缩（lz-string 1.5.0 完整库，MIT，用于缩短分享链接，v1.4.0）============
@@ -2114,7 +2116,7 @@ function renderResult(matched, unmatched) {
 
   const codes = Object.keys(matched);
   if (codes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">没有识别到配件，可手动添加 ↓</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">还没有配件，点下方 ➕ 手动添加 ↓</td></tr>';
   } else {
     // 已改/自定义配件标记集合（明细表规格型号旁 ✎）
     const cfgNow = getCustomCfg();
@@ -2593,6 +2595,8 @@ function clearResult() {
   FIX_DRAFT = {};
   document.getElementById('fix-zone').style.display = 'none';
   document.getElementById('fix-zone').innerHTML = '';
+  // v1.6.6：清空后仍渲染空结果区（含 ➕ 按钮），让手动添加在「开始计算」前也能用
+  renderResult({}, []);
 }
 
 // 删除某一行明细
@@ -2602,7 +2606,13 @@ function onDeleteRow(e) {
   const tbody = document.getElementById('detail-body');
   tr.remove();
   if (tbody.querySelectorAll('tr[data-code]').length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">没有识别到配件</td></tr>';
+    // v1.6.6：删空后仍保留 ➕ 按钮（v1.6.4 遗漏——原先会连 ➕ 一起清掉，删完就加不了了）
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">还没有配件，点下方 ➕ 手动添加 ↓</td></tr>'
+      + '<tr class="add-row-btn"><td colspan="8">'
+      + '<button class="btn-add-row" type="button">➕ 添加配件</button>'
+      + '</td></tr>';
+    var addBtn = tbody.querySelector('.btn-add-row');
+    if (addBtn) addBtn.addEventListener('click', showAddForm);
   }
   updateTotal();
 }

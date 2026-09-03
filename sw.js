@@ -1,5 +1,5 @@
 // 脚手架重量计算器 - Service Worker（网络优先，离线回退）
-var CACHE = 'scaffold-v1.6.5';
+var CACHE = 'scaffold-v1.6.6';
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();
