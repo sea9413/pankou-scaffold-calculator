@@ -369,7 +369,7 @@
     padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;
     font-size: 14px; font-family: inherit; box-sizing: border-box;
   }
-  .add-form-inline .add-size { width: 90px; }
+  .add-form-inline .add-size { min-width: 150px; }
   .add-form-inline .add-qty { width: 80px; }
   .btn-add-confirm {
     padding: 6px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 4px;
@@ -690,7 +690,7 @@
 <script>
 // ============ 版本检查（自动检测更新）============
 document.addEventListener('DOMContentLoaded', function(){
-  var VER = 'v1.6.4';
+  var VER = 'v1.6.5';
   try {
     var lastVer = localStorage.getItem('app_ver');
     if (lastVer && lastVer !== VER) {
@@ -2354,7 +2354,7 @@ function showAddForm() {
   formRow.innerHTML = '<td colspan="8">' +
     '<div class="add-form-inline">' +
     '<select class="add-type">' + typeOpts + '</select>' +
-    '<input class="add-size" placeholder="规格（如 2.5 / 0.9）">' +
+    '<select class="add-size"></select>' +
     '<input class="add-qty" type="number" min="1" step="1" placeholder="数量">' +
     '<select class="add-unit">' + unitOpts + '</select>' +
     '<button class="btn-add-confirm" type="button">✓ 加入</button>' +
@@ -2364,19 +2364,63 @@ function showAddForm() {
   btnRow.style.display = 'none';
   tbody.insertBefore(formRow, btnRow);
 
+  // 规格下拉随类型联动（v1.6.5 二级联动）
+  updateAddSizeOptions(formRow);
+  formRow.querySelector('.add-type').addEventListener('change', function () {
+    updateAddSizeOptions(formRow);
+    var sizeSel = formRow.querySelector('.add-size');
+    if (!sizeSel.disabled) sizeSel.focus();
+    else formRow.querySelector('.add-qty').focus();
+  });
+
   formRow.querySelector('.btn-add-confirm').addEventListener('click', function () { addManualPart(formRow); });
   formRow.querySelector('.btn-add-cancel').addEventListener('click', function () { cancelAddForm(formRow); });
-  var qtyInput = formRow.querySelector('.add-qty');
-  if (qtyInput) qtyInput.focus();
+
+  // 初始焦点：规格下拉（如启用）或数量
+  var sizeSelInit = formRow.querySelector('.add-size');
+  if (!sizeSelInit.disabled) sizeSelInit.focus();
+  else formRow.querySelector('.add-qty').focus();
+}
+// ============ 规格二级联动（v1.6.5）============
+// 类型一变就重填规格下拉：立杆只列立杆规格、横杆只列横杆规格；单规格类型（顶托/底座/架子）锁死
+function updateAddSizeOptions(formRow) {
+  var typeSel = formRow.querySelector('.add-type');
+  var sizeSel = formRow.querySelector('.add-size');
+  var type = typeSel.value;
+  var parts = (getPARTS() || []).filter(function (p) { return p.type === type; });
+
+  if (parts.length === 0) {
+    // 当前模式无该类型（理论上 types 已过滤，不太会到这）
+    sizeSel.innerHTML = '<option value="">— 该模式无此类型 —</option>';
+    sizeSel.disabled = true;
+    return;
+  }
+
+  if (parts.length === 1) {
+    // 单规格（顶托/底座/架子）：自动锁死
+    sizeSel.innerHTML = '<option value="' + parts[0].code + '">' + parts[0].code + '</option>';
+    sizeSel.disabled = true;
+    return;
+  }
+
+  // 多规格（立杆/横杆/斜拉杆）：按 size 数值升序
+  parts.sort(function (a, b) { return parseFloat(a.size) - parseFloat(b.size); });
+  sizeSel.innerHTML = '<option value="">— 请选规格 —</option>' +
+    parts.map(function (p) {
+      var label = p.code + (p.size ? ' (' + p.size + ')' : '');
+      return '<option value="' + p.code + '">' + label + '</option>';
+    }).join('');
+  sizeSel.disabled = false;
 }
 function addManualPart(formRow) {
   var type = formRow.querySelector('.add-type').value;
-  var size = formRow.querySelector('.add-size').value.trim();
+  var code = formRow.querySelector('.add-size').value;  // 二级联动后 .add-size 直接是 part.code
   var qty = parseFloat(formRow.querySelector('.add-qty').value);
   var unit = formRow.querySelector('.add-unit').value;
   if (!qty || qty <= 0) { showToast('请填写数量'); return; }
-  var part = findPartByTypeSize(type, size);
-  if (!part) { showToast('没找到「' + type + (size ? ' ' + size : '') + '」规格，检查数字或换类型'); return; }
+  if (!code) { showToast('请选择规格'); return; }
+  var part = getPARTS().find(function (p) { return p.type === type && p.code === code; });
+  if (!part) { showToast('没找到该规格'); return; }
   var isBundle = (unit === '捆' || unit === '扎' || unit === '件' || unit === '吊' || unit === '包');
   var realQty = (isBundle ? (part.bundle || 1) : 1) * qty;
   if (LAST_MATCHED[part.code]) {
