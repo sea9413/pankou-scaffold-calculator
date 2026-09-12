@@ -3,3 +3,6 @@
 
 # 提交信息临时文件
 commit_msg.txt
+
+# IDE / AI 记忆工作区（本地专用，不进仓库）
+.codebuddy/
